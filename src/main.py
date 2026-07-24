@@ -60,8 +60,5 @@ def main():
         elif state == States.HIGH:
             pass
 
-
-
-
 if __name__ == "__main__":
     main()

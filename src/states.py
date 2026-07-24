@@ -18,6 +18,7 @@ class States:
 class StateMachine:
     def __init__(self, initial_state=States.HIGH):
         self._state = initial_state
+        self._last_btn = 1
 
     def update(self, raw_value, btn_value):
         """
@@ -28,8 +29,13 @@ class StateMachine:
         FALLING  -> Acabou de entrar em LOW.
         RISING   -> Acabou de voltar para HIGH.
         """
-        if btn_value == 0:
+        # Detecta borda de subida do botão (pressionado -> solto)
+        if self._last_btn == 0 and btn_value == 1:
+            self._last_btn = btn_value
             return States.RESET
+
+        # Atualiza o estado anterior do botão
+        self._last_btn = btn_value
 
         # Estado HIGH
         if self._state == States.HIGH:
