@@ -3,8 +3,8 @@ import time
 
 class LDR:
     def __init__(self, pin, GAMMA = 0.7, RL10 = 50.0):
-        self._GAMMA = GAMMA
-        self._RL10 = RL10
+        self._GAMMA = GAMMA # sensibilidade a luz do LDR
+        self._RL10 = RL10   # resistencia do LDR a 10 lux
 
         AO = ADC(Pin(pin))
         
@@ -19,33 +19,41 @@ class LDR:
         return self._AO.read()
 
     def get_lux(self):
-        """metodo de leitura e conversão para lux seguindo o calculo presente em https://docs.wokwi.com/parts/wokwi-photoresistor-sensor"""
+        """metodo de leitura e conversão seguindo o calculo presente na documentação do wokwi"""
         
         raw = self._AO.read()
-        vol = raw / 4095.0 * 5 # tensao do pino AO
-        res = 2000 * vol / (1 - vol / 5) # calculo da resistencia do LDR
+        vol = raw / 4095.0 * 5              # tensao do pino AO
+        res = 2000 * vol / (1 - vol / 5)    # calculo da resistencia do LDR
 
         return pow(self._RL10 * 1e3 * pow(10, self._GAMMA) / res, (1 / self._GAMMA)) # conversao para lux
 
-
 class BTN:
     def __init__(self, pin, debounce_ms=50):
-        self._btn = Pin(pin, Pin.IN, Pin.PULL_UP)
-        self._last_state = self._btn.value()
+        self._button_pin = Pin(pin, Pin.IN, Pin.PULL_UP)
+        self._last_raw_state = self._button_pin.value()     # último valor bruto lido do botão (antes do debounce)
+        self._last_debounced_state = self._last_raw_state   # último valor já estabilizado pelo debounce
 
-        # atributos para implementar um debounce via software
-        self._dbc_ms = debounce_ms
-        self._last_time = time.ticks_ms()
+        # tempo mínimo entre mudanças aceitas
+        self._debounce_ms = debounce_ms
+        self._timestamp_debounce = time.ticks_ms()
 
     def get_value(self):
-        state = self._btn.value()
+        raw_state = self._button_pin.value()
 
-        #primeiro if verifica se houve mudança de estado no botao
-        if state != self._last_state:
+        # verifica se o valor bruto mudou
+        if raw_state != self._last_raw_state:
             now = time.ticks_ms()
-            #segunfo if verifica se essa mudança ocorre respeitando o intervalo debounce
-            if time.ticks_diff(now, self._last_time) >= self._dbc_ms:
-                self._last_state = state
-                self._last_time = now
 
-        return self._last_state
+            # só aceita a mudança se o intervalo de debounce foi respeitado
+            if time.ticks_diff(now, self._timestamp_debounce) >= self._debounce_ms:
+                self._last_raw_state = raw_state
+                self._timestamp_debounce = now
+
+        return self._last_raw_state
+    
+    def rising_edge(self):
+        current_state = self.get_value() 
+        rising_edge_detected = self._last_debounced_state == 0 and current_state == 1
+        self._last_debounced_state = current_state
+
+        return rising_edge_detected

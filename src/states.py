@@ -1,54 +1,36 @@
-LUX_HIGH_THRESHOLD = 999   # <= 999 -> HIGH (luz livre)
-LUX_LOW_THRESHOLD = 2045   # >= 2045 -> LOW (luz bloqueada)
-
-class States:
-    """
-        HIGH     -> Luz livre
-        LOW      -> Luz bloqueada
-        FALLING  -> Borda de descida (acabou de entrar em LOW)
-        RISING   -> Borda de subida (acabou de voltar para HIGH)
-    """
-    HIGH = 0
-    LOW = 1
-    RISING = 2
-    FALLING = 3
-    RESET = 4
-
-
 class StateMachine:
-    def __init__(self, initial_state=States.HIGH):
-        self._state = initial_state
-        self._last_btn = 1
+    # Estados (os valores atribuidos nao representam nada alem de uma enumeracao)
+    FREE = 0        # -> Luz livre
+    OBSTRUCTED = 1  # -> Luz bloqueada
+    RISING = 2      # -> Borda de subida (acabou de voltar para FREE)
+    FALLING = 3     # -> Borda de descida (acabou de entrar em OBSTRUCTED)
 
-    def update(self, raw_value, btn_value):
+    # LUX_FREE_THRESHOLD é o limite do intervarlo [0 a 999], ou seja, mais que 500 lux 
+    # LUX_OBSTRUCTED_THRESHOLD  é o limite do intervalor [2045 a 4095], ou seja, menos que 100 lux
+    def __init__(self, initial_state=FREE, LUX_FREE_THRESHOLD=999, LUX_OBSTRUCTED_THRESHOLD=2045):
+        self._state = initial_state
+        self.LUX_FREE_THRESHOLD = LUX_FREE_THRESHOLD
+        self.LUX_OBSTRUCTED_THRESHOLD = LUX_OBSTRUCTED_THRESHOLD
+
+    def update(self, raw_value):
         """
         Atualiza a máquina de estados e retorna o estado/evento atual.
-
-        HIGH     -> Luz livre.
-        LOW      -> Luz bloqueada.
-        FALLING  -> Acabou de entrar em LOW.
-        RISING   -> Acabou de voltar para HIGH.
         """
-        # Detecta borda de subida do botão (pressionado -> solto)
-        if self._last_btn == 0 and btn_value == 1:
-            self._last_btn = btn_value
-            return States.RESET
 
-        # Atualiza o estado anterior do botão
-        self._last_btn = btn_value
+        # Estado FREE
+        if self._state == self.FREE:
+            if raw_value >= self.LUX_OBSTRUCTED_THRESHOLD:
+                self._state = self.OBSTRUCTED
+                return self.FALLING
 
-        # Estado HIGH
-        if self._state == States.HIGH:
-            if raw_value >= LUX_LOW_THRESHOLD:
-                self._state = States.LOW
-                return States.FALLING
+            return self.FREE
 
-            return States.HIGH
+        # Estado OBSTRUCTED
+        if self._state == self.OBSTRUCTED:
+            if raw_value <= self.LUX_FREE_THRESHOLD:
+                self._state = self.FREE
+                return self.RISING
 
-        # Estado LOW
-        if self._state == States.LOW:
-            if raw_value <= LUX_HIGH_THRESHOLD:
-                self._state = States.HIGH
-                return States.RISING
+            return self.OBSTRUCTED
 
-            return States.LOW
+        return self._state

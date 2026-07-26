@@ -1,64 +1,57 @@
 from sensors import LDR, BTN
-from states import StateMachine, States
+from states import StateMachine
 import time
 
-#gpios usadas =)
+# gpios usadas =)
 LDR_PIN = 12
 BTN_PIN = 13
 
-#intervalo tolerável no estado low em milissegundos
+# intervalo tolerável no estado OBSTRUCTED em milissegundos
 MICRO_STOP_TIME_MS = 5000
 
 def main():
-    # interface para abstrair a inicialização e logica dos 
-    # periféricos, configurando pinos e atributos usados pelos métodos
+    # interfaces para os perifericos e máquina de estado
     ldr = LDR(LDR_PIN)
     btn = BTN(BTN_PIN)
+    state_machine = StateMachine()
 
-    # interface que abstrai a logica da máquina de estados
-    state_machine = StateMachine(initial_state=States.HIGH)
-
-    #variavel count se refere ao contador de produtos
-    # e timestamp guarda o momento em que o estado é de descida
-    count = 0
-    timestamp = 0.0
-
-    #flags para nao poluir o terminal 
-    alert_triggered = False
-    reset_triggered = False
+    count = 0                   # count se refere ao contador de produtos
+    timestamp = time.ticks_ms() # timestamp guarda um momento de referencia para calcular a microparada   
+    alert_triggered = False     # flag para nao poluir o terminal, imprimindo o alerta apenas uma vez
 
     print("Contador de Producao Inicializado")
 
     while True:
-        state = state_machine.update(ldr.get_raw_value(), btn.get_value())
+        # leitura do sensor de luz e detectação da borda de subida do botão já com debounce  
+        raw_value = ldr.get_raw_value()
+        btn_rising = btn.rising_edge()
 
-        # Reset das flags conforme o estado
-        if state == States.RESET:
-            if not reset_triggered:
-                count = 0
-                timestamp = 0.0
-                print("Turno resetado com sucesso. Contadores zerados.")
-                reset_triggered = True
-        else:
-            reset_triggered = False  # permite novo reset quando o botão for solto
-
-
-        if state == States.FALLING:
+        if btn_rising:
+            count = 0
             timestamp = time.ticks_ms()
-            alert_triggered = False  # nova parada, alerta ainda não emitido
+            alert_triggered = False
+            print("Turno resetado com sucesso. Contadores zerados.")
 
-        elif state == States.LOW:
+        # inferencia do estado do novo estado 
+        state = state_machine.update(raw_value) 
+
+        if state == StateMachine.FALLING:
+            timestamp = time.ticks_ms() # nova referencia de tempo para ser usada no estado OBSTRUCTED
+
+        elif state == StateMachine.OBSTRUCTED:
             if not alert_triggered and time.ticks_diff(time.ticks_ms(), timestamp) >= MICRO_STOP_TIME_MS:
                 print("Alerta: Micro-parada detectada!")
                 alert_triggered = True
 
-        elif state == States.RISING:
+        elif state == StateMachine.RISING:
             count += 1
             print("Peca detectada! Total:", count)
             alert_triggered = False
 
-        elif state == States.HIGH:
+        # trecho puramente semantico, não faz nada além de aguardar e pode ser removido  
+        elif state == StateMachine.FREE:
             pass
+
 
 if __name__ == "__main__":
     main()
